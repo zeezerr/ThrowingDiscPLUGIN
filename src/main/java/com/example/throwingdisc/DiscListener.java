@@ -52,6 +52,7 @@ public final class DiscListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onMelee(EntityDamageByEntityEvent e) {
+        if (plugin.discDamage) return;
         if (e.getDamager() instanceof Player p && p.isSneaking() && DiscItems.tierOf(p.getInventory().getItemInOffHand()) != null) {
             e.setCancelled(true);
             plugin.throwDisc(p, true);

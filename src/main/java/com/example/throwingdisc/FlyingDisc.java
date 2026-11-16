@@ -87,6 +87,15 @@ public final class FlyingDisc extends BukkitRunnable {
 
     @Override
     public void run() {
+        try {
+            step();
+        } catch (Exception ex) {
+            plugin.getLogger().log(java.util.logging.Level.WARNING, "Throwing disc error", ex);
+            finish(Bukkit.getPlayer(ownerId), true);
+        }
+    }
+
+    private void step() {
         Player owner = Bukkit.getPlayer(ownerId);
         if (finished || !display.isValid()) { finish(owner, true); return; }
         if (++age > 300) { finish(owner, false); return; }
@@ -164,16 +173,31 @@ public final class FlyingDisc extends BukkitRunnable {
         Vector dir = len < 1.0E-6 ? new Vector(0, 0, 1) : delta.clone().normalize();
         BoundingBox sweep = BoundingBox.of(from, to).expand(0.5);
 
+        // Hitting the thrower catches the disc instantly (ignored right after the throw).
+        if (owner != null && !owner.isDead() && (travelled > 2.0 || phase != Phase.OUT)) {
+            BoundingBox ob = owner.getBoundingBox().expand(0.3);
+            if (ob.contains(from) || ob.contains(to) || (len > 1.0E-6 && ob.rayTrace(from, dir, len) != null)) {
+                finish(owner, false);
+                return;
+            }
+        }
+
         for (Entity e : world.getNearbyEntities(sweep, x -> canHit(owner, x))) {
             BoundingBox box = e.getBoundingBox().expand(0.3);
             if (!box.contains(from) && (len < 1.0E-6 || box.rayTrace(from, dir, len) == null)) continue;
 
             alreadyHit.add(e.getUniqueId());
             LivingEntity target = (LivingEntity) e;
-            DamageSource.Builder src = DamageSource.builder(DamageType.THROWN);
-            if (owner != null) src.withCausingEntity(owner);
             target.setNoDamageTicks(0);
-            target.damage(tier.damage, src.build());
+            plugin.discDamage = true; // tells DiscListener not to treat this as a melee hit
+            try {
+                if (owner != null) target.damage(tier.damage, owner);
+                else target.damage(tier.damage);
+            } catch (Exception ex) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING, "Disc damage failed", ex);
+            } finally {
+                plugin.discDamage = false;
+            }
             target.setVelocity(target.getVelocity().add(dir.clone().multiply(0.45).setY(0.12)));
             world.playSound(target.getLocation(), Sound.ENTITY_ARROW_HIT, 0.8f, 1.2f);
             if (target.isDead() && target instanceof Mob && mobsKilled.add(target.getUniqueId())

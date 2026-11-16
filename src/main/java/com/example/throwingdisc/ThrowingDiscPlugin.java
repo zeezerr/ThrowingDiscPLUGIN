@@ -23,6 +23,8 @@ import org.bukkit.inventory.SmithingTransformRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class ThrowingDiscPlugin extends JavaPlugin {
+    /** true while a disc is dealing damage, so DiscListener ignores it. */
+    public volatile boolean discDamage;
     private final Set<FlyingDisc> flights = new HashSet<>();
     private final Map<UUID, Long> lastThrow = new HashMap<>();
 

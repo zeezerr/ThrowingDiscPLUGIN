@@ -1,6 +1,10 @@
 {
   "pack": {
-    "description": "Throwing Disc textures",
+    "description": [
+      { "text": "Throwing Discs\n", "color": "aqua", "bold": true },
+      { "text": "Made by ", "color": "gray", "bold": false },
+      { "text": "zeez", "color": "gold", "bold": true }
+    ],
     "min_format": 75,
     "max_format": 75
   }
