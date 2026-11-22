@@ -128,11 +128,14 @@ public final class FlyingDisc extends BukkitRunnable {
 
     private void advance(Player owner, boolean collideBlocks) {
         World world = pos.getWorld();
-        double len = vel.length();
+        boolean inWater = pos.getBlock().getType() == Material.WATER;
+        Vector step = inWater ? vel.clone().multiply(DiscTier.UNDERWATER) : vel; // half speed underwater
+        if (inWater) world.spawnParticle(Particle.BUBBLE, pos, 2, 0.1, 0.1, 0.1, 0);
+        double len = step.length();
         if (len < 1.0E-6) return;
-        Vector dir = vel.clone().normalize();
+        Vector dir = step.clone().normalize();
         Vector from = pos.toVector();
-        Vector end = from.clone().add(vel);
+        Vector end = from.clone().add(step);
 
         RayTraceResult blockHit = null;
         if (collideBlocks) {
@@ -154,8 +157,8 @@ public final class FlyingDisc extends BukkitRunnable {
             Vector n = face == null ? dir.clone().multiply(-1) : face.getDirection();
             double dot = vel.dot(n);
             vel = vel.clone().subtract(n.clone().multiply(2 * dot));
-            speed = Math.min(speed * 1.25, 3.0);
-            range += 6.0;
+            speed = Math.min(speed * DiscTier.BOUNCE_SPEED, 3.0);
+            range += DiscTier.BOUNCE_RANGE;
             if (++bounces >= 8) range = travelled;
             vel.normalize().multiply(speed);
             pos = end.clone().add(n.clone().multiply(0.15)).toLocation(world);
@@ -188,17 +191,22 @@ public final class FlyingDisc extends BukkitRunnable {
 
             alreadyHit.add(e.getUniqueId());
             LivingEntity target = (LivingEntity) e;
+            Vector velBefore = target.getVelocity().clone();
+            double dmg = tier.damage + enchantBonus(target);
             target.setNoDamageTicks(0);
             plugin.discDamage = true; // tells DiscListener not to treat this as a melee hit
             try {
-                if (owner != null) target.damage(tier.damage, owner);
-                else target.damage(tier.damage);
+                if (owner != null) target.damage(dmg, owner);
+                else target.damage(dmg);
             } catch (Exception ex) {
                 plugin.getLogger().log(java.util.logging.Level.WARNING, "Disc damage failed", ex);
             } finally {
                 plugin.discDamage = false;
             }
-            target.setVelocity(target.getVelocity().add(dir.clone().multiply(0.45).setY(0.12)));
+            target.setVelocity(velBefore); // no knockback
+            int fire = stack.getEnchantmentLevel(Enchantment.FIRE_ASPECT);
+            if (fire > 0) target.setFireTicks(80 * fire);
+            if (target instanceof Player victim) wearArmor(victim);
             world.playSound(target.getLocation(), Sound.ENTITY_ARROW_HIT, 0.8f, 1.2f);
             if (target.isDead() && target instanceof Mob && mobsKilled.add(target.getUniqueId())
                     && mobsKilled.size() >= 5 && owner != null) {
@@ -212,6 +220,49 @@ public final class FlyingDisc extends BukkitRunnable {
                 return;
             }
         }
+    }
+
+    /** Extra damage from Sharpness / Smite / Bane of Arthropods on the disc. */
+    private double enchantBonus(LivingEntity t) {
+        double bonus = 0;
+        int sharp = stack.getEnchantmentLevel(Enchantment.SHARPNESS);
+        if (sharp > 0) bonus += 0.5 * sharp + 0.5;
+        int smite = stack.getEnchantmentLevel(Enchantment.SMITE);
+        if (smite > 0 && (t instanceof org.bukkit.entity.Zombie || t instanceof org.bukkit.entity.AbstractSkeleton
+                || t instanceof org.bukkit.entity.Wither || t instanceof org.bukkit.entity.Phantom
+                || t instanceof org.bukkit.entity.ZombieHorse || t instanceof org.bukkit.entity.SkeletonHorse
+                || t instanceof org.bukkit.entity.Zoglin)) bonus += 2.5 * smite;
+        int bane = stack.getEnchantmentLevel(Enchantment.BANE_OF_ARTHROPODS);
+        if (bane > 0 && (t instanceof org.bukkit.entity.Spider || t instanceof org.bukkit.entity.Silverfish
+                || t instanceof org.bukkit.entity.Endermite || t instanceof org.bukkit.entity.Bee)) bonus += 2.5 * bane;
+        return bonus;
+    }
+
+    /** Discs chew through armor: every worn piece loses extra durability. */
+    private void wearArmor(Player victim) {
+        if (victim.getGameMode() == org.bukkit.GameMode.CREATIVE || victim.getGameMode() == org.bukkit.GameMode.SPECTATOR) return;
+        PlayerInventory inv = victim.getInventory();
+        ItemStack[] armor = inv.getArmorContents();
+        for (int i = 0; i < armor.length; i++) {
+            ItemStack a = armor[i];
+            if (a == null || a.getType().isAir() || !(a.getItemMeta() instanceof Damageable d) || d.isUnbreakable()) continue;
+            int max = d.hasMaxDamage() ? d.getMaxDamage() : a.getType().getMaxDurability();
+            if (max <= 0) continue;
+            int unbreaking = a.getEnchantmentLevel(Enchantment.UNBREAKING);
+            int wear = 0;
+            for (int n = 0; n < DiscTier.ARMOR_WEAR; n++) {
+                if (unbreaking == 0 || ThreadLocalRandom.current().nextDouble() < 0.6 + 0.4 / (unbreaking + 1)) wear++;
+            }
+            if (wear == 0) continue;
+            d.setDamage(d.getDamage() + wear);
+            if (d.getDamage() >= max) {
+                armor[i] = null;
+                victim.getWorld().playSound(victim.getLocation(), Sound.ENTITY_ITEM_BREAK, 0.8f, 1.0f);
+            } else {
+                a.setItemMeta(d);
+            }
+        }
+        inv.setArmorContents(armor);
     }
 
     private boolean canHit(Player owner, Entity e) {
@@ -228,7 +279,7 @@ public final class FlyingDisc extends BukkitRunnable {
         if (stack.getItemMeta() instanceof Damageable d) {
             d.setDamage(d.getDamage() + 1);
             stack.setItemMeta(d);
-            return d.getDamage() >= tier.durability;
+            return d.getDamage() >= (d.hasMaxDamage() ? d.getMaxDamage() : tier.durability);
         }
         return false;
     }

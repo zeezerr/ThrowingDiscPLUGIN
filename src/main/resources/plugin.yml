@@ -5,11 +5,13 @@ api-version: '1.21.11'
 description: Tiered boomerang-style throwing discs.
 commands:
   throwingdisc:
-    description: Give yourself a throwing disc
-    usage: /throwingdisc give <tier> [player]
+    description: Throwing disc admin command
+    usage: /throwingdisc config | /throwingdisc give <tier> [player]
     aliases: [tdisc]
-    permission: throwingdisc.give
 permissions:
   throwingdisc.give:
     description: Allows /throwingdisc give
+    default: op
+  throwingdisc.config:
+    description: Allows /throwingdisc config (settings GUI)
     default: op

@@ -3,6 +3,7 @@ package com.example.throwingdisc;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.common.collect.ImmutableMultimap;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -14,8 +15,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 public final class DiscItems {
-    /** Base item. Players without the resource pack just see an iron nugget. */
-    public static final Material BASE = Material.IRON_NUGGET;
+    /** Base item. Players without the resource pack just see a wooden sword. */
+    public static final Material BASE = Material.WOODEN_SWORD; // a sword base lets Sharpness etc. be applied
     public static NamespacedKey TIER_KEY;
 
     private DiscItems() {}
@@ -26,6 +27,7 @@ public final class DiscItems {
         meta.setItemModel(new NamespacedKey("throwingdisc", tier.id)); // texture from the resource pack
         meta.itemName(Component.text(tier.display + " Throwing Disc"));
         meta.setMaxStackSize(1);
+        meta.setAttributeModifiers(ImmutableMultimap.of()); // no melee bonus from the sword base
         meta.setEnchantable(tier.enchantability);
         if (meta instanceof Damageable d) d.setMaxDamage(tier.durability);
 
